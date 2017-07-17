@@ -14,9 +14,12 @@ sealed case class RIB(routerView: String, collector: String, format: String,
 object Main extends App {
   val baseDir = "/data/DataSet/BGP"
 
-  def parseRIB(line: String): RIB = {
-    val cols = line.substring(1, line.length - 1).split(",")
+  def split(line: String): Array[String] =
+    line.substring(1, line.length - 1).split(",")
       .map(_.trim.stripPrefix("'").stripSuffix("'"))
+
+  def parseRIB(line: String): RIB = {
+    val cols = split(line)
     RIB(
       cols(0), cols(1), cols(2), cols(3).toLong,
       cols(4).eq("valid"), cols(5), cols(6), cols(7).toInt,
@@ -25,8 +28,7 @@ object Main extends App {
   }
 
   def parseUpdate(line: String): Update = {
-    val cols = line.substring(1, line.length - 1).split(",")
-      .map(_.trim.stripPrefix("'").stripSuffix("'"))
+    val cols = split(line)
     Update(
       cols(0), cols(1), cols(2), cols(3).toLong,
       cols(4).eq("valid"), cols(5), cols(6),
@@ -124,14 +126,13 @@ object Main extends App {
       * {AS}.txt: format ->
       * Seq[Update] all related to $AS ordered by Update timestamp
       */
-    resource.managed(Source.fromFile(updatePath))
-      .map(_.getLines)
-      .toTraversable
-      .map(parseUpdate).par
-      .groupBy(update => (update.asNo, update.timestamp)).toArray
-      .sortBy { case ((_, timestamp), _) => timestamp }
-      .foreach { case ((asNo, _), updateIter) =>
-        val updateArray = updateIter.toArray.sortBy(_.timestamp)
+    val source = Source.fromFile(updatePath)
+    source.getLines()
+      .map(parseUpdate)
+      .toArray
+      .groupBy(update => update.asNo).toArray
+      .foreach { case ((asNo), updateSeq) =>
+        val updateArray = updateSeq.sortBy(_.timestamp)
         val file = Paths.get(s"$baseDir/Updates/$asNo.tsv").toFile
         file.getParentFile.mkdirs()
         file.createNewFile()
@@ -139,6 +140,7 @@ object Main extends App {
         updateArray.foreach(update => writer.write(update.productIterator.toSeq.mkString("\t")))
         writer.close()
       }
+    source.close()
   }
 
   def reachableCalc(dataDirPath: String): Unit = {
