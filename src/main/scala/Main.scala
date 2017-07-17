@@ -2,6 +2,15 @@ import java.io.{BufferedWriter, File, FileWriter}
 import java.nio.file.Paths
 import scala.io.Source
 
+sealed case class Update(routerView: String, collector: String, format: String,
+                         timestamp: Long, valid: Boolean, method: String, fromIP: String,
+                         asNo: Int, prefix: String)
+
+sealed case class RIB(routerView: String, collector: String, format: String,
+                      timestamp: Long, valid: Boolean, method: String, dst: String,
+                      fromAS: Int, prefix: String, asPath: Seq[Int])
+
+
 object Main extends App {
   val baseDir = "/data/DataSet/BGP"
 
@@ -26,8 +35,6 @@ object Main extends App {
   }
 
   def trans(): Unit = {
-
-
     val dataSet = (0 until 3).map(no => s"$baseDir/rib$no.txt")
 
     val prefer: Set[Int] = Set(
