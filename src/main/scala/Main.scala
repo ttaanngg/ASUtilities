@@ -21,7 +21,7 @@ object Main extends App {
     Update(
       cols(0), cols(1), cols(2), cols(3).toLong,
       cols(4).eq("valid"), cols(5), cols(6),
-      cols(7), cols(8).split(" ").map(_.toInt).toSeq
+      cols(7).toInt, cols(8)
     )
   }
 
@@ -121,7 +121,7 @@ object Main extends App {
       .map(_.getLines)
       .toTraversable
       .map(parseUpdate).par
-      .groupBy(update => (update.asPath.last, update.timestamp)).toArray
+      .groupBy(update => (update.asNo, update.timestamp)).toArray
       .sortBy { case ((_, timestamp), _) => timestamp }
       .foreach { case ((asNo, _), updateIter) =>
         val updateArray = updateIter.toArray.sortBy(_.timestamp)
@@ -137,5 +137,7 @@ object Main extends App {
   def reachableCalc(dataDirPath: String): Unit = {
 
   }
+
+  groupUpdate(s"$baseDir/updates.txt")
 
 }
