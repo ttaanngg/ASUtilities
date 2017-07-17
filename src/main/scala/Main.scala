@@ -5,13 +5,23 @@ import scala.io.Source
 object Main extends App {
   val baseDir = "/data/DataSet/BGP"
 
-  def parse(line: String): RIB = {
+  def parseRIB(line: String): RIB = {
     val cols = line.substring(1, line.length - 1).split(",")
       .map(_.trim.stripPrefix("'").stripSuffix("'"))
     RIB(
       cols(0), cols(1), cols(2), cols(3).toLong,
       cols(4).eq("valid"), cols(5), cols(6), cols(7).toInt,
       cols(8), cols(9).split(" ").map(_.toInt).toSeq
+    )
+  }
+
+  def parseUpdate(line: String): Update = {
+    val cols = line.substring(1, line.length - 1).split(",")
+      .map(_.trim.stripPrefix("'").stripSuffix("'"))
+    Update(
+      cols(0), cols(1), cols(2), cols(3).toLong,
+      cols(4).eq("valid"), cols(5), cols(6),
+      cols(7), cols(8).split(" ").map(_.toInt).toSeq
     )
   }
 
@@ -27,7 +37,7 @@ object Main extends App {
 
     val records = dataSet
       .map(path => new File(path))
-      .map(f => resource.managed(Source.fromFile(f)).map(_.getLines).toTraversable.toIterable.map(parse).toArray)
+      .map(f => resource.managed(Source.fromFile(f)).map(_.getLines).toTraversable.toIterable.map(parseRIB).toArray)
       .reduce((arrayA, arrayB) => arrayA ++ arrayB).toSeq
 
     println(s"total records ${records.length}")
@@ -102,33 +112,30 @@ object Main extends App {
       })
   }
 
-  def groupUpdate(updatePaths: Seq[String]): Unit = {
-    // TODO: Support multi paths
-    val updatePath = updatePaths.head
+  def groupUpdate(updatePath: String): Unit = {
+    /** Seq[Update] ->
+      * {AS}.txt: format ->
+      * Seq[Update] all related to $AS ordered by Update timestamp
+      */
     resource.managed(Source.fromFile(updatePath))
       .map(_.getLines)
       .toTraversable
-      .map(parse).par
-      .groupBy(rib => (rib.asPath.last, rib.timestamp))
-      .foreach{ case ((asNo, timestamp), ribIter) =>
-          val ribArray = ribIter.toArray.sortBy(_.timestamp)
-          val file = Paths.get(s"$baseDir/Updates/$asNo.tsv").toFile
-          file.getParentFile.mkdirs()
-          file.createNewFile()
-          println(s"writing file ${file.getName}")
-          val writer = new BufferedWriter(new FileWriter(file))
-          ribArray.foreach(rib => writer.write(s""))
-          writer.close()
+      .map(parseUpdate).par
+      .groupBy(update => (update.asPath.last, update.timestamp)).toArray
+      .sortBy { case ((_, timestamp), _) => timestamp }
+      .foreach { case ((asNo, _), updateIter) =>
+        val updateArray = updateIter.toArray.sortBy(_.timestamp)
+        val file = Paths.get(s"$baseDir/Updates/$asNo.tsv").toFile
+        file.getParentFile.mkdirs()
+        file.createNewFile()
+        val writer = new BufferedWriter(new FileWriter(file))
+        updateArray.foreach(update => writer.write(update.productIterator.toSeq.mkString("\t")))
+        writer.close()
       }
   }
-
 
   def reachableCalc(dataDirPath: String): Unit = {
 
   }
-
-  // Works
-  //  trans()
-  churnCalc(s"$baseDir/AS")
 
 }
